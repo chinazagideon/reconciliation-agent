@@ -39,10 +39,17 @@ export class ReconcileRunUseCase {
     private readonly opts: ReconcileOptions,
   ) {}
 
+  /** Create the run row, then run the saga (synchronous path: CLI + sync HTTP). */
   async execute(windowStart: Date, windowEnd: Date): Promise<Result<{ runId: string }>> {
     const created = await this.repo.createRun(windowStart, windowEnd);
     if (!created.ok) return err(created.error);
-    const runId = created.value.id;
+    return this.processRun(created.value.id, windowStart, windowEnd);
+  }
+
+  /** Run the saga for an ALREADY-CREATED run. This is what the queue worker calls
+   *  so the HTTP endpoint can return the run id immediately (202) and the heavy
+   *  work happens off the request path. */
+  async processRun(runId: string, windowStart: Date, windowEnd: Date): Promise<Result<{ runId: string }>> {
     const audit: AuditEntry[] = [
       { actor: "system", event: "run.started", entityId: runId, detail: { windowStart, windowEnd } },
     ];

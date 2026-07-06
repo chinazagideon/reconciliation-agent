@@ -3,6 +3,7 @@
 // synchronous call for v1's demo scale; Phase 5 moves it behind the queue.
 import type { FastifyInstance } from "fastify";
 import type { buildContainer } from "../../../infrastructure/container.js";
+import type { Queue } from "../../../infrastructure/queue.js";
 
 type Container = ReturnType<typeof buildContainer>;
 
@@ -16,11 +17,25 @@ function parseWindow(body: unknown): { start: Date; end: Date } | null {
   return { start, end };
 }
 
-export function registerReconciliationRoutes(app: FastifyInstance, c: Container) {
-  // Kick off a reconciliation run over a date window.
+export function registerReconciliationRoutes(app: FastifyInstance, c: Container, queue?: Queue) {
+  // Kick off a reconciliation run over a date window. With a queue, the heavy
+  // work runs off the request path: create the run, enqueue, return 202 + id.
+  // Without one, run synchronously (fine at demo scale — N1 is < 30s).
   app.post("/reconciliations", async (req, reply) => {
     const win = parseWindow(req.body);
     if (!win) return reply.code(400).send({ error: "windowStart/windowEnd required (start < end)" });
+
+    if (queue) {
+      const created = await c.repo.createRun(win.start, win.end);
+      if (!created.ok) return reply.code(500).send({ error: created.error.message });
+      await queue.enqueue({
+        runId: created.value.id,
+        windowStart: win.start.toISOString(),
+        windowEnd: win.end.toISOString(),
+      });
+      return reply.code(202).send({ status: "queued", runId: created.value.id });
+    }
+
     const result = await c.reconcileRun.execute(win.start, win.end);
     if (!result.ok) return reply.code(500).send({ error: result.error.message });
     return reply.code(201).send({ status: "done", runId: result.value.runId });
