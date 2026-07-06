@@ -1,0 +1,9 @@
+Metadata-Version: 2.4
+Name: resolution-agent
+Version: 0.1.0
+Summary: AI reasoning sidecar for Resolution AI. Explains unmatched items only.
+Requires-Python: >=3.11
+Requires-Dist: fastapi>=0.111
+Requires-Dist: uvicorn>=0.30
+Requires-Dist: pydantic>=2.7
+Requires-Dist: anthropic>=0.34
