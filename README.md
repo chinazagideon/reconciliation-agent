@@ -1,4 +1,4 @@
-# Resolution AI
+# Reconciliation Agent
 
 A financial reconciliation agent for two-sided marketplaces. It ingests Stripe
 transactions, internal ledger entries, and supplier payout records, matches them
