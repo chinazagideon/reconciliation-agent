@@ -99,6 +99,31 @@ export class PgTransactionRepository {
     }
   }
 
+  /** Batch fetch full records (with raw payload) for residue enrichment. */
+  async findByIds(ids: string[]): Promise<Result<StoredTransaction[]>> {
+    if (ids.length === 0) return ok([]);
+    try {
+      const { rows } = await pool.query(
+        `SELECT id, source, external_id, amount_minor, currency, occurred_at, raw
+           FROM reconciliation.transactions WHERE id = ANY($1)`,
+        [ids],
+      );
+      return ok(
+        rows.map((r) => ({
+          transactionId: r.id,
+          source: r.source,
+          externalId: r.external_id,
+          amount: money(Number(r.amount_minor)),
+          currency: currency(String(r.currency).toUpperCase()),
+          occurredAt: new Date(r.occurred_at),
+          raw: r.raw,
+        })),
+      );
+    } catch (e) {
+      return err(e instanceof Error ? e : new Error(String(e)));
+    }
+  }
+
   /** Seeder idempotency / demo reset: clear all reconciliation data so a reseed
    *  starts clean. Transactions are referenced by matches/review_items/agent_runs,
    *  so we TRUNCATE the whole reconciliation set (CASCADE handles the FK order).

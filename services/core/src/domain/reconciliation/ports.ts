@@ -55,11 +55,21 @@ export interface ReconciliationRepository {
   appendAudit(entries: AuditEntry[]): Promise<Result<void>>;
 }
 
+/** A residue item enriched with the full record the sidecar needs to reason. */
+export interface ResidueItem {
+  readonly transactionId: string;
+  readonly source: string;
+  readonly amountMinor: number;
+  readonly currency: string;
+  readonly occurredAt: Date;
+  readonly raw: unknown;
+}
+
 /** Outbound port to the AI reasoning sidecar. Suggestions only, never authority. */
 export interface AgentPort {
   /** Cheap liveness check so the core can degrade gracefully if the sidecar is down. */
   health(): Promise<boolean>;
-  explain(runId: string, unmatched: MatchCandidate[]): Promise<Result<AgentExplanation[]>>;
+  explain(runId: string, unmatched: ResidueItem[]): Promise<Result<AgentExplanation[]>>;
 }
 
 export interface AgentExplanation {

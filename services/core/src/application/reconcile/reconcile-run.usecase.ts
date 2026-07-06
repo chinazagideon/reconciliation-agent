@@ -130,7 +130,19 @@ export class ReconcileRunUseCase {
         audit.push({ actor: "system", event: "ai.skipped", entityId: runId,
           detail: { residue: residue.length, reason: "sidecar unhealthy" } });
       } else {
-        const explained = await this.agent.explain(runId, residue);
+        // Enrich residue with full records (source + raw payload) so the sidecar
+        // has real data to reason over, not just amount/date.
+        const full = await this.txns.findByIds(residue.map((c) => c.transactionId));
+        if (!full.ok) return await this.fail(runId, audit, full.error);
+        const residueItems = full.value.map((t) => ({
+          transactionId: t.transactionId,
+          source: t.source,
+          amountMinor: t.amount as number,
+          currency: t.currency as string,
+          occurredAt: t.occurredAt,
+          raw: t.raw,
+        }));
+        const explained = await this.agent.explain(runId, residueItems);
         if (!explained.ok) return await this.fail(runId, audit, explained.error);
         await this.repo.saveAgentRuns(runId, explained.value);
         const byId = new Map(explained.value.map((e) => [e.transactionId, e]));

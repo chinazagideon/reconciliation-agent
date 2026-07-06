@@ -2,8 +2,7 @@
 // The boundary where deterministic TS hands the residue to probabilistic Python.
 // All HTTP goes through the shared HttpService (one place for timeouts/retries/
 // error mapping). Defaults to caution: any missing/failed field -> needsHuman.
-import type { AgentPort, AgentExplanation } from "../../../domain/reconciliation/ports.js";
-import type { MatchCandidate } from "../../../domain/reconciliation/match.js";
+import type { AgentPort, AgentExplanation, ResidueItem } from "../../../domain/reconciliation/ports.js";
 import { type Result, ok, err } from "../../../domain/shared/result.js";
 import { HttpService } from "../../../infrastructure/http/http.service.js";
 
@@ -27,16 +26,16 @@ export class HttpAgentClient implements AgentPort {
     return res.ok && res.value?.status === "ok";
   }
 
-  async explain(runId: string, unmatched: MatchCandidate[]): Promise<Result<AgentExplanation[]>> {
+  async explain(runId: string, unmatched: ResidueItem[]): Promise<Result<AgentExplanation[]>> {
     const body = {
       run_id: runId,
       items: unmatched.map((c) => ({
-        source: "unknown",
+        source: c.source,
         external_id: c.transactionId,       // we key explanations by our txn id
-        amount_minor: c.amount as number,
-        currency: c.currency as string,
+        amount_minor: c.amountMinor,
+        currency: c.currency,
         occurred_at: c.occurredAt.toISOString(),
-        raw: {},
+        raw: c.raw ?? {},
       })),
     };
     const res = await this.http.request<WireExplanation[]>({
