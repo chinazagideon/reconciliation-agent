@@ -3,6 +3,8 @@
 // This is the seam that makes swapping Postgres for an in-memory fake trivial.
 import { PgReconciliationRepository } from "../adapters/outbound/postgres/reconciliation.repository.js";
 import { PgTransactionRepository } from "../adapters/outbound/postgres/transaction.repository.js";
+import { PgQueryRepository } from "../adapters/outbound/postgres/query.repository.js";
+import { ReviewService } from "../application/review/review.service.js";
 import { StripeConnector } from "../adapters/outbound/stripe/stripe.client.js";
 import { HttpAgentClient } from "../adapters/outbound/agent/agent.client.js";
 import { HttpService } from "./http/http.service.js";
@@ -33,6 +35,8 @@ export function buildContainer() {
   });
 
   const seeder = new Seeder(txnRepo);
+  const query = new PgQueryRepository();
+  const review = new ReviewService(query, repo);
 
-  return { reconcileRun, seeder, txnRepo, repo };
+  return { reconcileRun, seeder, txnRepo, repo, query, review };
 }
