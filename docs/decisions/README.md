@@ -23,3 +23,4 @@ system-shaped choice no single line can hold.
 - 0003 - PostgreSQL, single instance
 - 0004 - No vector store / embeddings
 - 0005 - Deterministic core, AI at the boundary
+- 0006 - Graceful degradation when AI sidecar is unavailable
