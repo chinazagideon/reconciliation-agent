@@ -14,8 +14,16 @@ export interface ReconciliationRun {
 }
 
 // Legal transitions live here (SRP: the run owns its own lifecycle rules).
-// TODO: implement transition guards, e.g. can only go matching -> explaining.
+// pending -> matching -> explaining -> done, with failed reachable from any
+// active state. done/failed are terminal.
+const TRANSITIONS: Record<RunStatus, readonly RunStatus[]> = {
+  pending: ["matching", "failed"],
+  matching: ["explaining", "done", "failed"], // done directly if there is no residue
+  explaining: ["done", "failed"],
+  done: [],
+  failed: [],
+};
+
 export function canTransition(from: RunStatus, to: RunStatus): boolean {
-  // TODO: replace with an explicit transition table
-  return from !== to;
+  return TRANSITIONS[from].includes(to);
 }

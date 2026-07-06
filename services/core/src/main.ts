@@ -5,8 +5,8 @@ import { buildContainer } from "./infrastructure/container.js";
 import { config } from "./infrastructure/config.js";
 
 const app = buildServer();
-const { reconcileRun } = buildContainer();
-registerReconciliationRoutes(app, reconcileRun);
+const container = buildContainer();
+registerReconciliationRoutes(app, container);
 
 app.listen({ port: config.port, host: "0.0.0.0" })
   .then((addr) => app.log.info(`resolution-core listening on ${addr}`))
