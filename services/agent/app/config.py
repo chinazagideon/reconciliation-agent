@@ -4,6 +4,8 @@ import os
 
 class Config:
     anthropic_api_key: str = os.environ.get("ANTHROPIC_API_KEY", "")
+    # GEMINI_API_KEY is the google-genai convention; GOOGLE_API_KEY is accepted too.
+    gemini_api_key: str = os.environ.get("GEMINI_API_KEY", "") or os.environ.get("GOOGLE_API_KEY", "")
     port: int = int(os.environ.get("PORT", "8000"))
 
     # Below this confidence, an item needs a human. Runtime config lives in env,

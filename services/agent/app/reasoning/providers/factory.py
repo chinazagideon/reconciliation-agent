@@ -1,10 +1,9 @@
 """Provider factory: pick the concrete LLMProvider from config.
 
-This is the single switch that makes the model swappable. Default is Anthropic
-Claude; set LLM_PROVIDER=heuristic for the offline path (no key). Falls back to
-the heuristic provider if 'anthropic' is selected without an API key, so the
-service never hard-fails just because a key is missing — it degrades to a
-working, if simpler, explainer.
+This is the single switch that makes the model swappable. Providers: "anthropic"
+(default, Claude), "gemini" (Google), and "heuristic" (offline, no key). Any API
+provider selected without its key degrades to the heuristic provider rather than
+hard-failing, so the service always answers — with a simpler explainer at worst.
 """
 from app.config import config
 from app.reasoning.providers.base import LLMProvider
@@ -25,5 +24,13 @@ def build_provider() -> LLMProvider:
         from app.reasoning.providers.anthropic_provider import AnthropicProvider
 
         return AnthropicProvider(config.anthropic_api_key, config.llm_model)
+
+    if choice == "gemini":
+        if not config.gemini_api_key:
+            return HeuristicProvider()
+        # Lazy import so anthropic/heuristic paths need no google-genai installed.
+        from app.reasoning.providers.gemini_provider import GeminiProvider
+
+        return GeminiProvider(config.gemini_api_key, config.llm_model)
 
     raise ValueError(f"Unknown LLM_PROVIDER: {config.llm_provider!r}")
