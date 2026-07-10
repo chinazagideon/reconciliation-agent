@@ -9,6 +9,12 @@ app/domain/models.py
 app/reasoning/__init__.py
 app/reasoning/explainer.py
 app/reasoning/prompts.py
+app/reasoning/providers/__init__.py
+app/reasoning/providers/anthropic_provider.py
+app/reasoning/providers/base.py
+app/reasoning/providers/factory.py
+app/reasoning/providers/gemini_provider.py
+app/reasoning/providers/heuristic_provider.py
 resolution_agent.egg-info/PKG-INFO
 resolution_agent.egg-info/SOURCES.txt
 resolution_agent.egg-info/dependency_links.txt

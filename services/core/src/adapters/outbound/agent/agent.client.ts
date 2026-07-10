@@ -1,15 +1,58 @@
 // Driven adapter: implements AgentPort by calling the Python FastAPI sidecar.
 // The boundary where deterministic TS hands the residue to probabilistic Python.
-import type { AgentPort, AgentExplanation } from "../../../domain/reconciliation/ports.js";
-import type { MatchCandidate } from "../../../domain/reconciliation/match.js";
-import { type Result, ok } from "../../../domain/shared/result.js";
-import { config } from "../../../infrastructure/config.js";
+// All HTTP goes through the shared HttpService (one place for timeouts/retries/
+// error mapping). Defaults to caution: any missing/failed field -> needsHuman.
+import type { AgentPort, AgentExplanation, ResidueItem } from "../../../domain/reconciliation/ports.js";
+import { type Result, ok, err } from "../../../domain/shared/result.js";
+import { HttpService } from "../../../infrastructure/http/http.service.js";
+
+// Wire shape the Python sidecar returns (snake_case), mirrored from its DTOs.
+interface WireExplanation {
+  external_id: string;
+  hypothesis: string;
+  confidence: number;
+  suggested_action: string;
+  needs_human: boolean;
+}
 
 export class HttpAgentClient implements AgentPort {
-  async explain(unmatched: MatchCandidate[]): Promise<Result<AgentExplanation[]>> {
-    // TODO: POST `${config.agentBaseUrl}/explain` with the unmatched items.
-    // TODO: treat low confidence as needsHuman = true (default to caution).
-    void unmatched; void config;
-    return ok([]);
+  constructor(
+    private readonly http: HttpService,
+    private readonly confidenceThreshold: number,
+  ) {}
+
+  async health(): Promise<boolean> {
+    const res = await this.http.request<{ status: string }>({ path: "/health", timeoutMs: 2000 });
+    return res.ok && res.value?.status === "ok";
+  }
+
+  async explain(runId: string, unmatched: ResidueItem[]): Promise<Result<AgentExplanation[]>> {
+    const body = {
+      run_id: runId,
+      items: unmatched.map((c) => ({
+        source: c.source,
+        external_id: c.transactionId,       // we key explanations by our txn id
+        amount_minor: c.amountMinor,
+        currency: c.currency,
+        occurred_at: c.occurredAt.toISOString(),
+        raw: c.raw ?? {},
+      })),
+    };
+    const res = await this.http.request<WireExplanation[]>({
+      path: "/explain",
+      method: "POST",
+      body,
+      timeoutMs: 60_000,
+    });
+    if (!res.ok) return err(res.error);
+    const explanations = (res.value ?? []).map<AgentExplanation>((w) => ({
+      transactionId: w.external_id,
+      hypothesis: w.hypothesis,
+      confidence: w.confidence,
+      suggestedAction: w.suggested_action,
+      // Trust the sidecar's flag, but default to caution below our threshold.
+      needsHuman: w.needs_human || w.confidence < this.confidenceThreshold,
+    }));
+    return ok(explanations);
   }
 }
