@@ -7,3 +7,4 @@ __pycache__/
 .DS_Store
 services/web/.next
 .next
+*.tsbuildinfo

@@ -5,9 +5,20 @@ import { useParams } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
 import { MetricCard } from "@/components/shared/metric-card";
 import { StatusBadge } from "@/components/shared/status-badge";
+import { EmptyState } from "@/components/shared/empty-state";
+import { Skeleton, TableSkeleton } from "@/components/shared/skeleton";
+import { QueryBoundary } from "@/components/shared/query-boundary";
 import { RunTabs } from "@/components/runs/run-tabs";
 import { ReviewCard } from "@/components/review/review-card";
-import Link from "next/link";
+import { Money } from "@/components/shared/money";
+import { ConfidenceBar } from "@/components/shared/confidence-bar";
+import {
+  useRun,
+  useMatches,
+  useExplanations,
+  useReviewItems,
+  useFraudItems,
+} from "@/hooks";
 
 // PRD Page 4: Run Detail — the main working screen.
 // Tabs: Matched | Explained | Review | Fraud | All
@@ -17,16 +28,21 @@ export default function RunDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [activeTab, setActiveTab] = useState<TabId>("review");
 
-  // TODO: fetch run, matches, explanations, review items from API
-  // const { data: run } = useSWR(`/reconciliations/${id}`, fetchRun);
+  const { data: run, isPending: runPending, isError: runError } = useRun(id);
+
+  // Each tab fetches only when active — no wasted requests.
+  const matches = useMatches(id, 1, activeTab === "matched");
+  const explanations = useExplanations(id, 1, activeTab === "explained");
+  const review = useReviewItems(id, activeTab === "review");
+  const fraud = useFraudItems(id, activeTab === "fraud");
 
   return (
     <>
       <PageHeader
-        title={`Run: Jun 24–30, 2026`}
+        title={run ? `Run: ${run.windowLabel}` : "Run"}
         description={
           <span className="flex items-center gap-2">
-            <StatusBadge status="done" />
+            {run && <StatusBadge status={run.status} />}
             <span className="text-xs text-muted">· Run ID: {id}</span>
           </span>
         }
@@ -34,72 +50,162 @@ export default function RunDetailPage() {
 
       {/* Metric cards */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-        <MetricCard label="Total" value={195} accent="explained" />
-        <MetricCard label="Matched" value={180} accent="matched" />
-        <MetricCard label="Explained" value={8} accent="explained" />
-        <MetricCard label="Review" value={4} accent="review" badge />
-        <MetricCard label="Fraud" value={2} accent="fraud" badge />
+        {runPending || !run ? (
+          Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="rounded-lg border border-border bg-surface p-4 dark:bg-surface-dark">
+              <Skeleton className="h-3 w-14" />
+              <Skeleton className="mt-3 h-6 w-10" />
+            </div>
+          ))
+        ) : (
+          <>
+            <MetricCard label="Total" value={run.totalCount} accent="explained" />
+            <MetricCard label="Matched" value={run.matchedCount} accent="matched" />
+            <MetricCard label="Explained" value={run.explainedCount} accent="explained" />
+            <MetricCard label="Review" value={run.reviewCount} accent="review" badge />
+            <MetricCard label="Fraud" value={run.fraudCount} accent="fraud" badge />
+          </>
+        )}
       </div>
 
       {/* Tabs */}
-      <RunTabs activeTab={activeTab} onTabChange={setActiveTab} />
+      <RunTabs
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        counts={
+          run
+            ? {
+                matched: run.matchedCount,
+                explained: run.explainedCount,
+                review: run.reviewCount,
+                fraud: run.fraudCount,
+              }
+            : undefined
+        }
+      />
 
       {/* Tab content */}
       <div className="mt-4">
         {activeTab === "matched" && (
-          <div className="rounded-lg border border-border bg-surface p-8 text-center text-sm text-muted dark:bg-surface-dark">
-            {/* TODO: render Match rows with side-by-side transaction pairs */}
-            Matched transactions — to be implemented. Each row shows two paired records and the strategy that linked them.
-          </div>
+          <QueryBoundary
+            query={matches}
+            skeleton={<CardBox><TableSkeleton rows={3} cols={3} /></CardBox>}
+            empty={<Muted>No matched pairs in this run.</Muted>}
+          >
+            {(page) => (
+              <div className="space-y-3">
+                {page.items.map((m) => (
+                  <div key={m.id} className="rounded-lg border border-border bg-surface p-4 dark:bg-surface-dark">
+                    <div className="mb-2 text-xs font-mono text-muted">strategy: {m.strategy}</div>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      {[m.left, m.right].map((side, i) => (
+                        <div key={i}>
+                          <div className="text-xs uppercase text-muted">{i === 0 ? "Left" : "Right"}</div>
+                          {side ? (
+                            <div className="mt-1 flex items-center gap-2">
+                              <span className="font-mono">{side.id}</span>
+                              <span className="text-xs text-muted">· {side.source}</span>
+                              <Money amount={side.amountMinor} currency={side.currency} className="text-sm" />
+                            </div>
+                          ) : (
+                            <div className="mt-1 text-muted">—</div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </QueryBoundary>
         )}
 
         {activeTab === "explained" && (
-          <div className="rounded-lg border border-border bg-surface p-8 text-center text-sm text-muted dark:bg-surface-dark">
-            {/* TODO: render AI explanations with confidence bars */}
-            AI-explained items — to be implemented. High-confidence hypotheses shown as informational cards.
-          </div>
+          <QueryBoundary
+            query={explanations}
+            skeleton={<CardBox><TableSkeleton rows={3} cols={2} /></CardBox>}
+            empty={<Muted>No AI-explained items in this run.</Muted>}
+          >
+            {(page) => (
+              <div className="space-y-3">
+                {page.items.map((e) => (
+                  <div key={e.id} className="rounded-lg border border-border bg-surface p-4 dark:bg-surface-dark">
+                    <div className="mb-1 flex items-center gap-2 text-sm">
+                      <span className="font-mono">{e.transactionId}</span>
+                      {e.transaction && (
+                        <Money amount={e.transaction.amountMinor} currency={e.transaction.currency} className="text-sm" />
+                      )}
+                    </div>
+                    <p className="text-sm leading-relaxed">{e.hypothesis}</p>
+                    <div className="mt-2 flex items-center justify-between">
+                      <ConfidenceBar confidence={e.confidence} />
+                      <span className="text-xs font-mono text-muted">→ {e.suggestedAction}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </QueryBoundary>
         )}
 
         {activeTab === "review" && (
-          <div className="space-y-4">
-            {/* TODO: map over fetchReviewItems() results */}
-            <ReviewCard
-              transactionId="TXN-0847"
-              source="stripe"
-              amount={14723}
-              currency="CAD"
-              date="Jun 27, 2026"
-              hypothesis="This is likely the capture of a $150.00 authorization from Jun 25 (TXN-0801). The $2.77 difference matches a promotional discount code applied at checkout."
-              confidence={0.62}
-              suggestedAction="match_with:TXN-0801"
-            />
-            <ReviewCard
-              transactionId="TXN-0852"
-              source="ledger"
-              amount={20000}
-              currency="CAD"
-              date="Jun 28, 2026"
-              hypothesis="No matching Stripe charge found. This may be a manual ledger entry created for an offline payment collected outside the platform."
-              confidence={0.23}
-              suggestedAction="investigate"
-            />
-          </div>
+          <QueryBoundary
+            query={review}
+            skeleton={<CardBox><TableSkeleton rows={2} cols={1} /></CardBox>}
+            empty={
+              <EmptyState
+                title="Nothing to review"
+                description="Every discrepancy in this run has been resolved."
+              />
+            }
+          >
+            {(items) => (
+              <div className="space-y-4">
+                {items.map((item) => (
+                  <ReviewCard key={item.transaction.id} item={item} runId={id} />
+                ))}
+              </div>
+            )}
+          </QueryBoundary>
         )}
 
         {activeTab === "fraud" && (
-          <div className="rounded-lg border border-border bg-surface p-8 text-center text-sm text-muted dark:bg-surface-dark">
-            {/* TODO: render fraud-flagged items with candidate counts */}
-            Fraud-flagged items — to be implemented. Transactions where the batch aggregation candidate set exceeded 10.
-          </div>
+          <QueryBoundary
+            query={fraud}
+            skeleton={<CardBox><TableSkeleton rows={2} cols={1} /></CardBox>}
+            empty={<Muted>No fraud-flagged items in this run.</Muted>}
+          >
+            {(items) => (
+              <div className="space-y-4">
+                {items.map((item) => (
+                  <ReviewCard key={item.transaction.id} item={item} runId={id} />
+                ))}
+              </div>
+            )}
+          </QueryBoundary>
         )}
 
         {activeTab === "all" && (
-          <div className="rounded-lg border border-border bg-surface p-8 text-center text-sm text-muted dark:bg-surface-dark">
-            {/* TODO: render all transactions with status badges */}
-            All transactions in this run — to be implemented. Sortable by amount, status, date.
-          </div>
+          <Muted>
+            {runError
+              ? "Couldn't load this run."
+              : "Switch to a category tab (Matched, Explained, Review, Fraud) to inspect transactions."}
+          </Muted>
         )}
       </div>
     </>
+  );
+}
+
+// Small presentational wrappers reused across tabs.
+function CardBox({ children }: { children: React.ReactNode }) {
+  return <div className="rounded-lg border border-border bg-surface dark:bg-surface-dark">{children}</div>;
+}
+
+function Muted({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="rounded-lg border border-border bg-surface p-8 text-center text-sm text-muted dark:bg-surface-dark">
+      {children}
+    </div>
   );
 }

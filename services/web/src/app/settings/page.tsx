@@ -1,26 +1,21 @@
 "use client";
 
-import { useState } from "react";
 import { PageHeader } from "@/components/shared/page-header";
+import { useGenerateSeedData, useResetAllData } from "@/hooks";
 
 // PRD Page 6: Settings — data sources, platform config, demo tools.
 export default function SettingsPage() {
-  const [isSeeding, setIsSeeding] = useState(false);
-  const [isResetting, setIsResetting] = useState(false);
+  const seed = useGenerateSeedData();
+  const reset = useResetAllData();
+  const manifest = seed.data;
 
-  async function handleSeed() {
-    setIsSeeding(true);
-    // TODO: call generateSeedData() API
-    // const { data } = await generateSeedData();
-    // Show manifest summary
-    setIsSeeding(false);
+  function handleSeed() {
+    seed.mutate();
   }
 
-  async function handleReset() {
+  function handleReset() {
     if (!confirm("This will delete all transactions, runs, and audit entries. This cannot be undone.")) return;
-    setIsResetting(true);
-    // TODO: call resetAllData() API
-    setIsResetting(false);
+    reset.mutate();
   }
 
   return (
@@ -107,12 +102,32 @@ export default function SettingsPage() {
               </div>
               <button
                 onClick={handleSeed}
-                disabled={isSeeding}
+                disabled={seed.isPending}
                 className="rounded-md bg-explained px-4 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
               >
-                {isSeeding ? "Generating..." : "Generate"}
+                {seed.isPending ? "Generating..." : "Generate"}
               </button>
             </div>
+
+            {/* Seed manifest summary (after a successful generate) */}
+            {manifest && (
+              <div className="rounded-md border border-border bg-gray-50 p-3 text-xs dark:bg-gray-900">
+                <p className="font-medium text-matched">
+                  Generated {manifest.totalRecords} records · {manifest.windowLabel}
+                </p>
+                <ul className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1 text-muted">
+                  <li>Exact matches: {manifest.expected.exactMatches}</li>
+                  <li>Tolerant matches: {manifest.expected.tolerantMatches}</li>
+                  <li>AI explained: {manifest.expected.aiExplained}</li>
+                  <li>Fraud flagged: {manifest.expected.fraudFlagged}</li>
+                  <li className="col-span-2">Total matched: {manifest.expected.totalMatchedPct}</li>
+                </ul>
+              </div>
+            )}
+            {seed.isError && (
+              <p className="text-xs text-unmatched">{seed.error.message}</p>
+            )}
+
             <div className="flex items-center justify-between border-t border-border pt-3">
               <div>
                 <p className="text-sm font-medium text-unmatched">Reset All Data</p>
@@ -122,12 +137,15 @@ export default function SettingsPage() {
               </div>
               <button
                 onClick={handleReset}
-                disabled={isResetting}
+                disabled={reset.isPending}
                 className="rounded-md border border-unmatched px-4 py-1.5 text-xs font-medium text-unmatched hover:bg-red-50 disabled:opacity-50 dark:hover:bg-red-900/20"
               >
-                {isResetting ? "Resetting..." : "Reset"}
+                {reset.isPending ? "Resetting..." : "Reset"}
               </button>
             </div>
+            {reset.isError && (
+              <p className="text-xs text-unmatched">{reset.error.message}</p>
+            )}
           </div>
         </section>
       </div>

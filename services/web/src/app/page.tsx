@@ -1,18 +1,33 @@
+"use client";
+
 import { MetricCard } from "@/components/shared/metric-card";
 import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
+import { CardSkeleton } from "@/components/shared/skeleton";
 import { RecentRuns } from "@/components/dashboard/recent-runs";
 import { PatternChart } from "@/components/dashboard/pattern-chart";
+import { useDashboardMetrics } from "@/hooks";
 import Link from "next/link";
 import { GitCompareArrows } from "lucide-react";
 
 // PRD Page 1: Dashboard — "Is my money accounted for?"
-// TODO: fetch real data from API. Static placeholder for scaffold.
 export default function DashboardPage() {
-  // Placeholder metrics — will come from fetchDashboardMetrics()
-  const hasRuns = false;
+  const { data: metrics, isPending, isError } = useDashboardMetrics();
 
-  if (!hasRuns) {
+  const newRunButton = (
+    <Link
+      href="/runs/new"
+      className="rounded-md bg-explained px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+    >
+      + New Run
+    </Link>
+  );
+
+  // Empty and error both resolve to the same invitation to act — a graceful
+  // degraded state while the backend is scaffolded.
+  const showEmpty = isError || (metrics && metrics.total === 0);
+
+  if (showEmpty) {
     return (
       <>
         <PageHeader title="Dashboard" />
@@ -28,12 +43,7 @@ export default function DashboardPage() {
               >
                 Generate Seed Data
               </Link>
-              <Link
-                href="/runs/new"
-                className="rounded-md bg-explained px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-              >
-                + New Run
-              </Link>
+              {newRunButton}
             </div>
           }
         />
@@ -43,25 +53,21 @@ export default function DashboardPage() {
 
   return (
     <>
-      <PageHeader
-        title="Dashboard"
-        action={
-          <Link
-            href="/runs/new"
-            className="rounded-md bg-explained px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-          >
-            + New Run
-          </Link>
-        }
-      />
+      <PageHeader title="Dashboard" action={newRunButton} />
 
       {/* Metric cards — PRD top row */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-        <MetricCard label="Matched" value={342} percentage="93.4%" accent="matched" />
-        <MetricCard label="Unmatched" value={8} percentage="2.2%" accent="unmatched" />
-        <MetricCard label="Explained" value={8} percentage="2.2%" accent="explained" />
-        <MetricCard label="Review" value={4} percentage="1.1%" accent="review" badge />
-        <MetricCard label="Fraud" value={2} percentage="0.5%" accent="fraud" badge />
+        {isPending || !metrics ? (
+          Array.from({ length: 5 }).map((_, i) => <CardSkeleton key={i} />)
+        ) : (
+          <>
+            <MetricCard label="Matched" value={metrics.matched.count} percentage={metrics.matched.percentage} accent="matched" />
+            <MetricCard label="Unmatched" value={metrics.unmatched.count} percentage={metrics.unmatched.percentage} accent="unmatched" />
+            <MetricCard label="Explained" value={metrics.explained.count} percentage={metrics.explained.percentage} accent="explained" />
+            <MetricCard label="Review" value={metrics.review.count} percentage={metrics.review.percentage} accent="review" badge />
+            <MetricCard label="Fraud" value={metrics.fraud.count} percentage={metrics.fraud.percentage} accent="fraud" badge />
+          </>
+        )}
       </div>
 
       {/* Recent runs + pattern chart */}
