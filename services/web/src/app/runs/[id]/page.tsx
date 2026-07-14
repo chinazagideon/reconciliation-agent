@@ -30,11 +30,13 @@ export default function RunDetailPage() {
 
   const { data: run, isPending: runPending, isError: runError } = useRun(id);
 
-  // Each tab fetches only when active — no wasted requests.
-  const matches = useMatches(id, 1, activeTab === "matched");
-  const explanations = useExplanations(id, 1, activeTab === "explained");
-  const review = useReviewItems(id, activeTab === "review");
-  const fraud = useFraudItems(id, activeTab === "fraud");
+  // All four tabs come back inside the run detail payload, so these are four
+  // projections of one cached request — not four fetches. Switching tabs costs
+  // nothing, which is why none of them are gated on `activeTab` any more.
+  const matches = useMatches(id);
+  const explanations = useExplanations(id);
+  const review = useReviewItems(id);
+  const fraud = useFraudItems(id);
 
   return (
     <>
@@ -92,24 +94,20 @@ export default function RunDetailPage() {
             skeleton={<CardBox><TableSkeleton rows={3} cols={3} /></CardBox>}
             empty={<Muted>No matched pairs in this run.</Muted>}
           >
-            {(page) => (
+            {(items) => (
               <div className="space-y-3">
-                {page.items.map((m) => (
+                {items.map((m) => (
                   <div key={m.id} className="rounded-lg border border-border bg-surface p-4 dark:bg-surface-dark">
                     <div className="mb-2 text-xs font-mono text-muted">strategy: {m.strategy}</div>
                     <div className="grid grid-cols-2 gap-4 text-sm">
                       {[m.left, m.right].map((side, i) => (
                         <div key={i}>
                           <div className="text-xs uppercase text-muted">{i === 0 ? "Left" : "Right"}</div>
-                          {side ? (
-                            <div className="mt-1 flex items-center gap-2">
-                              <span className="font-mono">{side.id}</span>
-                              <span className="text-xs text-muted">· {side.source}</span>
-                              <Money amount={side.amountMinor} currency={side.currency} className="text-sm" />
-                            </div>
-                          ) : (
-                            <div className="mt-1 text-muted">—</div>
-                          )}
+                          <div className="mt-1 flex items-center gap-2">
+                            <span className="font-mono">{side.externalId}</span>
+                            <span className="text-xs text-muted">· {side.source}</span>
+                            <Money amount={side.amountMinor} currency={side.currency} className="text-sm" />
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -126,21 +124,31 @@ export default function RunDetailPage() {
             skeleton={<CardBox><TableSkeleton rows={3} cols={2} /></CardBox>}
             empty={<Muted>No AI-explained items in this run.</Muted>}
           >
-            {(page) => (
+            {(items) => (
               <div className="space-y-3">
-                {page.items.map((e) => (
-                  <div key={e.id} className="rounded-lg border border-border bg-surface p-4 dark:bg-surface-dark">
+                {items.map((item) => (
+                  <div key={item.id} className="rounded-lg border border-border bg-surface p-4 dark:bg-surface-dark">
                     <div className="mb-1 flex items-center gap-2 text-sm">
-                      <span className="font-mono">{e.transactionId}</span>
-                      {e.transaction && (
-                        <Money amount={e.transaction.amountMinor} currency={e.transaction.currency} className="text-sm" />
-                      )}
+                      <span className="font-mono">{item.transaction.externalId}</span>
+                      <Money
+                        amount={item.transaction.amountMinor}
+                        currency={item.transaction.currency}
+                        className="text-sm"
+                      />
                     </div>
-                    <p className="text-sm leading-relaxed">{e.hypothesis}</p>
-                    <div className="mt-2 flex items-center justify-between">
-                      <ConfidenceBar confidence={e.confidence} />
-                      <span className="text-xs font-mono text-muted">→ {e.suggestedAction}</span>
-                    </div>
+                    {item.explanation ? (
+                      <>
+                        <p className="text-sm leading-relaxed">{item.explanation.hypothesis}</p>
+                        <div className="mt-2 flex items-center justify-between">
+                          <ConfidenceBar confidence={item.explanation.confidence} />
+                          <span className="text-xs font-mono text-muted">
+                            → {item.explanation.suggestedAction}
+                          </span>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-sm text-muted">AI produced no hypothesis for this item.</p>
+                    )}
                   </div>
                 ))}
               </div>
@@ -162,7 +170,7 @@ export default function RunDetailPage() {
             {(items) => (
               <div className="space-y-4">
                 {items.map((item) => (
-                  <ReviewCard key={item.transaction.id} item={item} runId={id} />
+                  <ReviewCard key={item.id} item={item} runId={id} />
                 ))}
               </div>
             )}
@@ -178,7 +186,7 @@ export default function RunDetailPage() {
             {(items) => (
               <div className="space-y-4">
                 {items.map((item) => (
-                  <ReviewCard key={item.transaction.id} item={item} runId={id} />
+                  <ReviewCard key={item.id} item={item} runId={id} />
                 ))}
               </div>
             )}

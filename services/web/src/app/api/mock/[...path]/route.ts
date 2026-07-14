@@ -50,14 +50,23 @@ export async function GET(req: Request, { params }: Params) {
   // /reconciliations...
   if (a === "reconciliations") {
     if (!b) return NextResponse.json(paginate(fx.runs, url)); // list
+    // Detail ships the run AND its four tabs in one payload, like core does.
+    // There are deliberately no per-tab endpoints here: the real service has
+    // none, and a mock that invents them hides that from the client.
     if (b && !c) {
       const run = fx.getRun(b);
-      return run ? ok(run) : notFound(path);
+      return run
+        ? ok({
+            run,
+            tabs: {
+              matched: fx.matches,
+              explained: fx.explanations,
+              review: fx.reviewItems,
+              fraud: fx.fraudItems,
+            },
+          })
+        : notFound(path);
     }
-    if (c === "matches") return NextResponse.json(paginate(fx.matches.filter((m) => m.run_id === b), url));
-    if (c === "explanations") return NextResponse.json(paginate(fx.explanations.filter((e) => e.run_id === b), url));
-    if (c === "review") return ok(fx.reviewItems);
-    if (c === "fraud") return ok(fx.fraudItems);
   }
 
   // /transactions/:id, /transactions/:id/audit
@@ -85,14 +94,14 @@ export async function POST(req: Request, { params }: Params) {
   const { path } = await params;
   const [a, b, c] = path;
 
-  // POST /reconciliations → create a run (echo a new done-ish run)
+  // POST /reconciliations → 202 { status, runId }, not the run itself.
   if (a === "reconciliations" && !b) {
-    return ok({ ...fx.runs[0], id: `run_${Date.now()}`, status: "pending" });
+    return ok({ status: "queued", runId: `run_${Date.now()}` });
   }
 
-  // POST /reconciliations/:id/review → record a decision
-  if (a === "reconciliations" && b && c === "review") {
-    return ok(null);
+  // POST /review-items/:id/action → record a decision against the REVIEW ITEM.
+  if (a === "review-items" && b && c === "action") {
+    return ok({ status: "ok" });
   }
 
   // POST /seed

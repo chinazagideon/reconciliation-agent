@@ -21,17 +21,30 @@ export interface RunRow {
   created_at: string;
 }
 
+/** One page of rows plus the unpaged total, so the API can report `total`
+ *  honestly instead of echoing back the size of the slice it just fetched. */
+export interface Paged<T> {
+  rows: T[];
+  total: number;
+}
+
 export class PgQueryRepository {
-  async listRuns(limit = 50): Promise<Result<RunRow[]>> {
+  async listRuns(limit = 50, offset = 0): Promise<Result<Paged<RunRow>>> {
     try {
-      const { rows } = await pool.query(
-        `SELECT id, window_start, window_end, status, matched_count, unmatched_count,
-                explained_count, review_count, fraud_count, ai_skipped, partial, created_at
-           FROM reconciliation.reconciliations
-          ORDER BY created_at DESC LIMIT $1`,
-        [limit],
-      );
-      return ok(rows as RunRow[]);
+      const [page, count] = await Promise.all([
+        pool.query(
+          `SELECT id, window_start, window_end, status, matched_count, unmatched_count,
+                  explained_count, review_count, fraud_count, ai_skipped, partial, created_at
+             FROM reconciliation.reconciliations
+            ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
+          [limit, offset],
+        ),
+        pool.query(`SELECT COUNT(*)::int AS total FROM reconciliation.reconciliations`),
+      ]);
+      return ok({
+        rows: page.rows as RunRow[],
+        total: (count.rows[0]?.total as number) ?? 0,
+      });
     } catch (e) {
       return err(e instanceof Error ? e : new Error(String(e)));
     }
@@ -175,24 +188,33 @@ export class PgQueryRepository {
   async listAudit(
     opts: {
       event?: string | undefined; actor?: string | undefined;
-      since?: Date | undefined; until?: Date | undefined; limit?: number | undefined;
+      since?: Date | undefined; until?: Date | undefined;
+      limit?: number | undefined; offset?: number | undefined;
     } = {},
-  ): Promise<Result<unknown[]>> {
+  ): Promise<Result<Paged<unknown>>> {
     const clauses: string[] = [];
-    const params: unknown[] = [];
-    if (opts.event) { params.push(opts.event); clauses.push(`event = $${params.length}`); }
-    if (opts.actor) { params.push(opts.actor); clauses.push(`actor = $${params.length}`); }
-    if (opts.since) { params.push(opts.since); clauses.push(`at >= $${params.length}`); }
-    if (opts.until) { params.push(opts.until); clauses.push(`at < $${params.length}`); }
-    params.push(opts.limit ?? 50);
+    const filters: unknown[] = [];
+    if (opts.event) { filters.push(opts.event); clauses.push(`event = $${filters.length}`); }
+    if (opts.actor) { filters.push(opts.actor); clauses.push(`actor = $${filters.length}`); }
+    if (opts.since) { filters.push(opts.since); clauses.push(`at >= $${filters.length}`); }
+    if (opts.until) { filters.push(opts.until); clauses.push(`at < $${filters.length}`); }
     const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+    // The count must apply the same filters as the page, or paging through a
+    // filtered log walks off the end of a total it never had.
+    const paged = [...filters, opts.limit ?? 50, opts.offset ?? 0];
     try {
-      const { rows } = await pool.query(
-        `SELECT id, at, actor, event, entity_id, detail FROM audit.audit_log
-         ${where} ORDER BY id DESC LIMIT $${params.length}`,
-        params,
-      );
-      return ok(rows);
+      const [page, count] = await Promise.all([
+        pool.query(
+          `SELECT id, at, actor, event, entity_id, detail FROM audit.audit_log
+           ${where} ORDER BY id DESC LIMIT $${filters.length + 1} OFFSET $${filters.length + 2}`,
+          paged,
+        ),
+        pool.query(`SELECT COUNT(*)::int AS total FROM audit.audit_log ${where}`, filters),
+      ]);
+      return ok({
+        rows: page.rows,
+        total: (count.rows[0]?.total as number) ?? 0,
+      });
     } catch (e) {
       return err(e instanceof Error ? e : new Error(String(e)));
     }

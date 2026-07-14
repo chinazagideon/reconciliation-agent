@@ -1,42 +1,49 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { fetchReviewItems, fetchFraudItems, submitReview } from "@/lib/api";
+import { fetchRun, submitReview } from "@/lib/api";
 import { toReviewItemVM } from "@/lib/mappers";
 import type { ReviewItemVM } from "@/lib/view-models";
 import type { ReviewAction } from "@resolution/shared";
 import { qk } from "./query-keys";
 
-// Items awaiting human decision → ReviewItemVM[].
-export function useReviewItems(runId: string | undefined, enabled = true) {
+// Like the tabs in useMatches: a projection of the one run-detail query, not a
+// request of its own.
+function useRunTab(
+  runId: string | undefined,
+  tab: "review" | "fraud",
+) {
   return useQuery({
-    queryKey: qk.runs.review(runId ?? "—"),
-    queryFn: () => fetchReviewItems(runId as string),
-    enabled: !!runId && enabled,
-    select: (res): ReviewItemVM[] => res.data.map(toReviewItemVM),
+    queryKey: qk.runs.detail(runId ?? "—"),
+    queryFn: () => fetchRun(runId as string),
+    enabled: !!runId,
+    select: (res): ReviewItemVM[] => res.data.tabs[tab].map(toReviewItemVM),
   });
+}
+
+// Items awaiting human decision → ReviewItemVM[].
+export function useReviewItems(runId: string | undefined) {
+  return useRunTab(runId, "review");
 }
 
 // Fraud-flagged items → ReviewItemVM[].
-export function useFraudItems(runId: string | undefined, enabled = true) {
-  return useQuery({
-    queryKey: qk.runs.fraud(runId ?? "—"),
-    queryFn: () => fetchFraudItems(runId as string),
-    enabled: !!runId && enabled,
-    select: (res): ReviewItemVM[] => res.data.map(toReviewItemVM),
-  });
+export function useFraudItems(runId: string | undefined) {
+  return useRunTab(runId, "fraud");
 }
 
-// Approve / override / dismiss a review item. On success, invalidate the
-// review + fraud lists, the run's metrics, and the dashboard totals.
+// Approve / override / dismiss ONE review item. The action targets the review
+// item by id (POST /review-items/:id/action) — the run id is only here so the
+// right cache entries get invalidated afterwards.
 export function useSubmitReview(runId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (action: ReviewAction) => submitReview(runId, action),
+    mutationFn: (vars: { reviewItemId: string; action: ReviewAction }) =>
+      submitReview(vars.reviewItemId, vars.action),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: qk.runs.review(runId) });
-      qc.invalidateQueries({ queryKey: qk.runs.fraud(runId) });
+      // The tabs live inside the run detail payload, so invalidating it
+      // refreshes the review list, the fraud list and the counts together.
       qc.invalidateQueries({ queryKey: qk.runs.detail(runId) });
+      qc.invalidateQueries({ queryKey: qk.runs.all });
       qc.invalidateQueries({ queryKey: qk.dashboard.all });
     },
   });

@@ -49,32 +49,34 @@ export interface RunVM {
 // ── Match ──────────────────────────────────────────────────────
 export interface MatchVM {
   id: string;
-  runId: string;
   strategy: MatchStrategy;
-  createdAgo: string;
-  left?: TransactionVM;
-  right?: TransactionVM;
+  detail?: Record<string, unknown>; // e.g. { members: [...] } for a batch match
+  left: TransactionVM;
+  right: TransactionVM;
 }
 
 // ── Agent Explanation ──────────────────────────────────────────
+// Never exists on its own — it is the AI half of a review item, present only
+// when the AI actually produced a hypothesis.
 export interface ExplanationVM {
   id: string;
-  runId: string;
   transactionId: string;
   hypothesis: string;
   confidence: number; // 0.0–1.0
   confidenceLabel: string; // "High"
   suggestedAction: SuggestedAction;
   needsHuman: boolean;
-  transaction?: TransactionVM;
 }
 
 // ── Review Item ────────────────────────────────────────────────
 export interface ReviewItemVM {
+  id: string; // the review item's own id — what a review action targets
+  kind: "ai" | "fraud";
   transaction: TransactionVM;
-  explanation?: ExplanationVM;
+  explanation?: ExplanationVM; // absent for fraud flags and AI-skipped items
   flagReason?: "low_confidence" | "ai_skipped" | "fraud";
   candidateCount?: number;
+  resolution?: string; // set once a human has acted
 }
 
 // ── Audit Entry ────────────────────────────────────────────────

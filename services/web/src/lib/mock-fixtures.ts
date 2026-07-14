@@ -115,67 +115,113 @@ export const runs: ReconciliationRun[] = [
 const runById = new Map(runs.map((r) => [r.id, r]));
 
 // ── Matches ────────────────────────────────────────────────────
+// Flat left_*/right_* join rows, and amounts as strings — exactly what core
+// sends (Postgres serialises BIGINT as text). The mock has to lie the same way
+// the real thing does, or it hides the bugs it exists to catch.
 export const matches: Match[] = [
   {
     id: "match_0001",
-    run_id: "run_2026w26",
-    left_transaction_id: "TXN-0801",
-    right_transaction_id: "TXN-0847",
     strategy: "tolerant:fee",
-    created_at: "2026-07-01T09:14:55Z",
-    left: txById.get("TXN-0801"),
-    right: txById.get("TXN-0847"),
+    detail: { fee_minor: 277 },
+    left_id: "TXN-0801",
+    left_source: "stripe",
+    left_ref: "ch_3PabcXYZ0801",
+    left_amount: "15000",
+    left_currency: "CAD",
+    left_at: "2026-06-25T14:02:11Z",
+    right_id: "TXN-0847",
+    right_source: "ledger",
+    right_ref: "LED-20260627-0847",
+    right_amount: "14723",
+    right_currency: "CAD",
+    right_at: "2026-06-27T09:41:00Z",
   },
 ];
 
-// ── Explanations ───────────────────────────────────────────────
-export const explanations: AgentExplanation[] = [
+// ── Review items ───────────────────────────────────────────────
+// One flat shape backs the Explained, Review and Fraud tabs; they differ only
+// by which rows the filter lets through. `id` is the REVIEW ITEM's id — the
+// thing POST /review-items/:id/action addresses.
+export const reviewItems: ReviewItem[] = [
   {
-    id: "exp_0001",
-    run_id: "run_2026w26",
-    transaction_id: "TXN-0847",
+    id: "ri_0001",
+    kind: "ai",
     hypothesis:
       "Likely the capture of a $150.00 authorization from Jun 25 (TXN-0801). The $2.77 difference matches a promotional discount applied at checkout.",
     confidence: 0.62,
     suggested_action: "match_with:TXN-0801",
     needs_human: true,
-    created_at: "2026-07-01T09:15:02Z",
-    transaction: txById.get("TXN-0847"),
+    candidate_count: null,
+    resolution: null,
+    resolution_note: null,
+    txn_id: "TXN-0847",
+    source: "ledger",
+    external_id: "LED-20260627-0847",
+    amount_minor: "14723",
+    currency: "CAD",
+    occurred_at: "2026-06-27T09:41:00Z",
   },
   {
-    id: "exp_0002",
-    run_id: "run_2026w26",
-    transaction_id: "TXN-0852",
+    id: "ri_0002",
+    kind: "ai",
     hypothesis:
       "No matching Stripe charge found. This may be a manual ledger entry for an offline payment collected outside the platform.",
     confidence: 0.23,
     suggested_action: "investigate",
     needs_human: true,
-    created_at: "2026-07-01T09:15:03Z",
-    transaction: txById.get("TXN-0852"),
+    candidate_count: null,
+    resolution: null,
+    resolution_note: null,
+    txn_id: "TXN-0852",
+    source: "ledger",
+    external_id: "LED-20260628-0852",
+    amount_minor: "8800",
+    currency: "CAD",
+    occurred_at: "2026-06-28T11:12:00Z",
   },
 ];
 
-// ── Review items ───────────────────────────────────────────────
-export const reviewItems: ReviewItem[] = [
+// AI-explained but confident enough to need no human — the Explained tab.
+export const explanations: ReviewItem[] = [
   {
-    transaction: txById.get("TXN-0847")!,
-    explanation: explanations[0],
-    flag_reason: "low_confidence",
-  },
-  {
-    transaction: txById.get("TXN-0852")!,
-    explanation: explanations[1],
-    flag_reason: "low_confidence",
+    id: "ri_0003",
+    kind: "ai",
+    hypothesis:
+      "Refund issued Jun 29 against the Jun 22 charge; the ledger has not yet booked the reversal.",
+    confidence: 0.91,
+    suggested_action: "flag_refund",
+    needs_human: false,
+    candidate_count: null,
+    resolution: null,
+    resolution_note: null,
+    txn_id: "TXN-0863",
+    source: "stripe",
+    external_id: "re_3PabcXYZ0863",
+    amount_minor: "-4500",
+    currency: "CAD",
+    occurred_at: "2026-06-29T16:20:00Z",
   },
 ];
 
 // ── Fraud items ────────────────────────────────────────────────
+// The AI columns are null: the fraud heuristic fired, no hypothesis was formed.
 export const fraudItems: ReviewItem[] = [
   {
-    transaction: txById.get("TXN-0902")!,
-    flag_reason: "fraud",
+    id: "ri_0004",
+    kind: "fraud",
+    hypothesis: null,
+    confidence: null,
+    suggested_action: "flag_fraud",
+    needs_human: true,
     candidate_count: 14,
+    resolution: null,
+    resolution_note: null,
+    txn_id: "TXN-0902",
+    source: "stripe",
+    external_id: "ch_3PabcXYZ0902",
+    amount_minor: "21545",
+    currency: "CAD",
+    occurred_at: "2026-06-20T19:40:58Z",
   },
 ];
 

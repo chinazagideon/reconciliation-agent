@@ -8,6 +8,12 @@
 export type Money = number; // branded in core service; plain number at the boundary
 export type CurrencyCode = string; // ISO 4217, e.g. "CAD"
 
+// What money actually looks like ON THE WIRE. Postgres serialises BIGINT as a
+// string ("255362") to protect precision, and node-postgres passes it through
+// untouched, so every amount arrives as a string. Mappers coerce it exactly
+// once, at the boundary; nothing downstream should ever see this type.
+export type MoneyWire = string | number;
+
 // ── Transaction ────────────────────────────────────────────────
 // A normalised record from any source, after FieldMapping ingestion.
 export interface Transaction {
@@ -51,16 +57,25 @@ export type RunStatus =
 
 // ── Match ──────────────────────────────────────────────────────
 // A pair of transactions linked by a deterministic matcher.
+//
+// The API flattens both sides into one row (a join, not a nesting) — this is
+// the shape `listMatches` actually selects, so it is the shape declared here.
 export interface Match {
   id: string;
-  run_id: string;
-  left_transaction_id: string;
-  right_transaction_id: string;
   strategy: MatchStrategy;
-  created_at: string;
-  // populated on detail views
-  left?: Transaction;
-  right?: Transaction;
+  detail: Record<string, unknown> | null; // e.g. { members: [...] } for a batch
+  left_id: string;
+  left_source: TransactionSource;
+  left_ref: string; // the source's own id (external_id)
+  left_amount: MoneyWire;
+  left_currency: CurrencyCode;
+  left_at: string; // ISO 8601
+  right_id: string;
+  right_source: TransactionSource;
+  right_ref: string;
+  right_amount: MoneyWire;
+  right_currency: CurrencyCode;
+  right_at: string;
 }
 
 export type MatchStrategy =
@@ -95,21 +110,39 @@ export type SuggestedAction =
   | "dismiss";
 
 // ── Review Item ────────────────────────────────────────────────
-// A transaction awaiting human decision (low confidence or fraud flag).
+// A transaction awaiting (or having received) a human decision. One flat row
+// joining review_items to its transaction — again, the shape the API really
+// sends. The AI columns are null for fraud flags and for items the AI skipped.
+//
+// This same row backs the Explained, Review and Fraud tabs; they differ only by
+// the filter applied (`kind`, `needs_human`, `resolution`), not by shape.
 export interface ReviewItem {
-  transaction: Transaction;
-  explanation?: AgentExplanation; // absent if AI was skipped or fraud-flagged
-  flag_reason?: "low_confidence" | "ai_skipped" | "fraud";
-  candidate_count?: number; // present when flag_reason is "fraud"
+  id: string; // the review item's OWN id — what POST /review-items/:id/action takes
+  kind: "ai" | "fraud";
+  hypothesis: string | null;
+  confidence: number | null; // 0.0–1.0
+  suggested_action: SuggestedAction | null;
+  needs_human: boolean;
+  candidate_count: number | null; // set when the fraud heuristic fired
+  resolution: string | null; // null while open; else approve / override / dismiss
+  resolution_note: string | null;
+  // the joined transaction, flattened
+  txn_id: string;
+  source: TransactionSource;
+  external_id: string;
+  amount_minor: MoneyWire;
+  currency: CurrencyCode;
+  occurred_at: string;
 }
 
 // ── Review Action ──────────────────────────────────────────────
-// What the human decided to do with a review item.
+// The body of POST /review-items/:id/action — what the human decided.
+// The item is identified by the URL, not the body.
 export interface ReviewAction {
-  transaction_id: string;
   action: "approve" | "override" | "dismiss";
-  override_explanation?: string; // required when action is "override"
-  override_action?: string;
+  actor?: string; // defaults to "user:demo" server-side
+  note?: string; // the human's rationale; carried into the audit log
+  matchWith?: string; // transaction id to pair with, when overriding into a match
 }
 
 // ── Audit Entry ────────────────────────────────────────────────
@@ -166,13 +199,45 @@ export interface SeedManifest {
 }
 
 // ── API Response Wrappers ──────────────────────────────────────
+// Every response from core arrives in one of these two envelopes — a single
+// value under `data`, or a list under `data` with its paging meta alongside.
+// Enforced server-side by services/core/.../http/envelope.ts; if you find
+// yourself reaching for a bespoke top-level key, that is the bug.
 export interface ApiResponse<T> {
   data: T;
 }
 
 export interface PaginatedResponse<T> {
   data: T[];
-  total: number;
+  total: number; // rows matching the query, NOT rows in this page
   page: number;
   per_page: number;
+}
+
+// POST /reconciliations → ApiResponse<CreateRunResponse>.
+// The request body is camelCase — unlike every other payload here — because
+// that is what the controller parses. "queued" comes back with 202 when a
+// worker picks the run up; "done" with 201 when it ran inline. Either way the
+// run itself is then fetched via GET /reconciliations/:id.
+export interface CreateRunRequest {
+  windowStart: string; // ISO 8601
+  windowEnd: string;
+}
+
+export interface CreateRunResponse {
+  status: "queued" | "done";
+  runId: string;
+}
+
+// GET /reconciliations/:id → ApiResponse<RunDetail>.
+// The tabs ship WITH the run, so the detail page needs exactly one request:
+// there are no per-tab endpoints, and asking for them returns 404.
+export interface RunDetail {
+  run: ReconciliationRun;
+  tabs: {
+    matched: Match[];
+    explained: ReviewItem[]; // AI-explained, no human needed
+    review: ReviewItem[]; // open and awaiting a human
+    fraud: ReviewItem[];
+  };
 }

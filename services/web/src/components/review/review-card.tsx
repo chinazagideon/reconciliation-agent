@@ -5,6 +5,7 @@ import { Money } from "@/components/shared/money";
 import { ConfidenceBar } from "@/components/shared/confidence-bar";
 import { useSubmitReview } from "@/hooks";
 import type { ReviewItemVM } from "@/lib/view-models";
+import type { ReviewAction } from "@resolution/shared";
 
 interface ReviewCardProps {
   item: ReviewItemVM;
@@ -19,8 +20,13 @@ export function ReviewCard({ item, runId }: ReviewCardProps) {
   const [showOverride, setShowOverride] = useState(false);
   const [overrideText, setOverrideText] = useState("");
 
+  // The action addresses the review item, not the transaction it points at.
+  function act(action: ReviewAction) {
+    mutate({ reviewItemId: item.id, action });
+  }
+
   function handleApprove() {
-    mutate({ transaction_id: tx.id, action: "approve" });
+    act({ action: "approve" });
   }
 
   function handleOverride() {
@@ -28,15 +34,12 @@ export function ReviewCard({ item, runId }: ReviewCardProps) {
       setShowOverride(true);
       return;
     }
-    mutate({
-      transaction_id: tx.id,
-      action: "override",
-      override_explanation: overrideText,
-    });
+    // The operator's rationale is the note — it lands in the audit log.
+    act({ action: "override", note: overrideText });
   }
 
   function handleDismiss() {
-    mutate({ transaction_id: tx.id, action: "dismiss" });
+    act({ action: "dismiss" });
   }
 
   return (

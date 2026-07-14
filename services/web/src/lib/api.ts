@@ -5,10 +5,10 @@
 
 import type {
   ReconciliationRun,
+  CreateRunRequest,
+  CreateRunResponse,
+  RunDetail,
   Transaction,
-  Match,
-  AgentExplanation,
-  ReviewItem,
   ReviewAction,
   AuditEntry,
   DashboardMetrics,
@@ -54,53 +54,25 @@ export function fetchRuns(page = 1, perPage = 20) {
   );
 }
 
+// The run AND its four tabs, in one request. There are no per-tab endpoints —
+// /reconciliations/:id/{matches,explanations,review,fraud} do not exist.
 export function fetchRun(id: string) {
-  return api<ApiResponse<ReconciliationRun>>(`/reconciliations/${id}`);
+  return api<ApiResponse<RunDetail>>(`/reconciliations/${id}`);
 }
 
-export function createRun(body: {
-  window_start: string;
-  window_end: string;
-  sources: string[];
-}) {
-  return api<ApiResponse<ReconciliationRun>>("/reconciliations", {
+export function createRun(body: CreateRunRequest) {
+  return api<ApiResponse<CreateRunResponse>>("/reconciliations", {
     method: "POST",
     body: JSON.stringify(body),
   });
 }
 
-// ── Matches (within a run) ─────────────────────────────────────
-export function fetchMatches(runId: string, page = 1) {
-  return api<PaginatedResponse<Match>>(
-    `/reconciliations/${runId}/matches?page=${page}`,
-  );
-}
-
-// ── Explanations (within a run) ────────────────────────────────
-export function fetchExplanations(runId: string, page = 1) {
-  return api<PaginatedResponse<AgentExplanation>>(
-    `/reconciliations/${runId}/explanations?page=${page}`,
-  );
-}
-
-// ── Review items (within a run) ────────────────────────────────
-export function fetchReviewItems(runId: string) {
-  return api<ApiResponse<ReviewItem[]>>(
-    `/reconciliations/${runId}/review`,
-  );
-}
-
-export function submitReview(runId: string, action: ReviewAction) {
-  return api<ApiResponse<void>>(`/reconciliations/${runId}/review`, {
-    method: "POST",
-    body: JSON.stringify(action),
-  });
-}
-
-// ── Fraud items (within a run) ─────────────────────────────────
-export function fetchFraudItems(runId: string) {
-  return api<ApiResponse<ReviewItem[]>>(
-    `/reconciliations/${runId}/fraud`,
+// ── Review actions ─────────────────────────────────────────────
+// Targets the REVIEW ITEM, not the run: the id here is ReviewItem.id.
+export function submitReview(reviewItemId: string, action: ReviewAction) {
+  return api<ApiResponse<{ status: string }>>(
+    `/review-items/${reviewItemId}/action`,
+    { method: "POST", body: JSON.stringify(action) },
   );
 }
 
@@ -123,7 +95,8 @@ export function fetchAuditLog(params?: {
   if (params?.page) qs.set("page", String(params.page));
   if (params?.event) qs.set("event", params.event);
   if (params?.actor) qs.set("actor", params.actor);
-  return api<PaginatedResponse<AuditEntry>>(`/audit?${qs}`);
+  const response = api<PaginatedResponse<AuditEntry>>(`/audit?${qs}`);
+  return response;
 }
 
 // ── Settings / seed ────────────────────────────────────────────

@@ -10,6 +10,13 @@ import Link from "next/link";
 // Date range + source selection + optional CSV upload with column mapping.
 const CSV_FIELDS = ["external_id", "amount_minor", "currency", "occurred_at"];
 
+// <input type="date"> yields a bare "2026-06-30". The API takes an instant, and
+// treats the window as [start, end) — so an end date is widened to the last
+// moment of that day, otherwise picking Jun 30 would silently drop Jun 30's
+// records. This also makes a single-day window (start === end) a valid request.
+const startOfDay = (date: string) => `${date}T00:00:00.000Z`;
+const endOfDay = (date: string) => `${date}T23:59:59.999Z`;
+
 export default function NewRunPage() {
   const router = useRouter();
   const [windowStart, setWindowStart] = useState("");
@@ -31,24 +38,33 @@ export default function NewRunPage() {
   }
 
   async function handleSubmit() {
-    if (!windowStart || !windowEnd || sources.length < 2) return;
+    if (!canSubmit) return;
 
     // If a CSV source is selected with a file, ingest it first.
     if (sources.includes("csv") && csvFile) {
       await uploadCsv.mutateAsync({ file: csvFile, mapping });
     }
 
-    const run = await createRun.mutateAsync({
-      windowStart,
-      windowEnd,
-      sources,
+    const runId = await createRun.mutateAsync({
+      windowStart: startOfDay(windowStart),
+      windowEnd: endOfDay(windowEnd),
     });
-    if (run) router.push(`/runs/${run.id}`);
+    router.push(`/runs/${runId}`);
   }
 
   const isSubmitting = createRun.isPending || uploadCsv.isPending;
+  // Caught here rather than at the API, which rejects an end-before-start window
+  // with a 400 that reads as if the dates were missing entirely.
+  const rangeError =
+    windowStart && windowEnd && windowEnd < windowStart
+      ? "End date must be on or after the start date."
+      : null;
   const canSubmit =
-    !!windowStart && !!windowEnd && sources.length >= 2 && !isSubmitting;
+    !!windowStart &&
+    !!windowEnd &&
+    !rangeError &&
+    sources.length >= 2 &&
+    !isSubmitting;
   const error = createRun.error ?? uploadCsv.error;
 
   return (
@@ -74,6 +90,9 @@ export default function NewRunPage() {
               className="rounded-md border border-border bg-surface px-3 py-2 text-sm dark:bg-surface-dark"
             />
           </div>
+          {rangeError && (
+            <p className="mt-1 text-xs text-review">{rangeError}</p>
+          )}
         </div>
 
         {/* Sources */}

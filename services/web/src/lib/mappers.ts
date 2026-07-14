@@ -10,9 +10,9 @@ import type {
   Transaction,
   ReconciliationRun,
   Match,
-  AgentExplanation,
   ReviewItem,
   AuditEntry,
+  MoneyWire,
   DashboardMetrics,
   PatternDistribution,
   SeedManifest,
@@ -39,18 +39,25 @@ import {
   confidenceLabel,
 } from "./utils";
 
+// Postgres hands BIGINT back as a string to protect precision, so every amount
+// arrives as "255362", not 255362. Coerce here — once, at the seam — because a
+// string that reaches <Money> silently renders as NaN rather than throwing.
+function toMinor(wire: MoneyWire): number {
+  return typeof wire === "number" ? wire : Number(wire);
+}
+
 // ── Transaction ────────────────────────────────────────────────
 export function toTransactionVM(dto: Transaction): TransactionVM {
   return {
     id: dto.id,
     source: dto.source,
     externalId: dto.external_id,
-    amountFormatted: formatMoney(dto.amount_minor, dto.currency),
-    amountMinor: dto.amount_minor,
+    amountFormatted: formatMoney(toMinor(dto.amount_minor), dto.currency),
+    amountMinor: toMinor(dto.amount_minor),
     currency: dto.currency,
     occurredOn: formatDate(dto.occurred_at),
     occurredAtIso: dto.occurred_at,
-    raw: dto.raw,
+    raw: dto.raw ?? {},
   };
 }
 
@@ -73,40 +80,84 @@ export function toRunVM(dto: ReconciliationRun): RunVM {
 }
 
 // ── Match ──────────────────────────────────────────────────────
+// The wire row is a flat join (left_* / right_*); the VM re-nests it into the
+// two sides the UI actually renders.
 export function toMatchVM(dto: Match): MatchVM {
   return {
     id: dto.id,
-    runId: dto.run_id,
     strategy: dto.strategy,
-    createdAgo: formatTimeAgo(dto.created_at),
-    left: dto.left ? toTransactionVM(dto.left) : undefined,
-    right: dto.right ? toTransactionVM(dto.right) : undefined,
-  };
-}
-
-// ── Agent Explanation ──────────────────────────────────────────
-export function toExplanationVM(dto: AgentExplanation): ExplanationVM {
-  return {
-    id: dto.id,
-    runId: dto.run_id,
-    transactionId: dto.transaction_id,
-    hypothesis: dto.hypothesis,
-    confidence: dto.confidence,
-    confidenceLabel: confidenceLabel(dto.confidence),
-    suggestedAction: dto.suggested_action,
-    needsHuman: dto.needs_human,
-    transaction: dto.transaction ? toTransactionVM(dto.transaction) : undefined,
+    detail: dto.detail ?? undefined,
+    left: {
+      id: dto.left_id,
+      source: dto.left_source,
+      externalId: dto.left_ref,
+      amountFormatted: formatMoney(toMinor(dto.left_amount), dto.left_currency),
+      amountMinor: toMinor(dto.left_amount),
+      currency: dto.left_currency,
+      occurredOn: formatDate(dto.left_at),
+      occurredAtIso: dto.left_at,
+      raw: {},
+    },
+    right: {
+      id: dto.right_id,
+      source: dto.right_source,
+      externalId: dto.right_ref,
+      amountFormatted: formatMoney(toMinor(dto.right_amount), dto.right_currency),
+      amountMinor: toMinor(dto.right_amount),
+      currency: dto.right_currency,
+      occurredOn: formatDate(dto.right_at),
+      occurredAtIso: dto.right_at,
+      raw: {},
+    },
   };
 }
 
 // ── Review Item ────────────────────────────────────────────────
+// One flat row backs the Explained, Review and Fraud tabs. The transaction is
+// re-nested, and the AI columns — null for fraud flags and skipped items — are
+// folded into an optional `explanation`.
 export function toReviewItemVM(dto: ReviewItem): ReviewItemVM {
   return {
-    transaction: toTransactionVM(dto.transaction),
-    explanation: dto.explanation ? toExplanationVM(dto.explanation) : undefined,
-    flagReason: dto.flag_reason,
-    candidateCount: dto.candidate_count,
+    id: dto.id,
+    kind: dto.kind,
+    transaction: {
+      id: dto.txn_id,
+      source: dto.source,
+      externalId: dto.external_id,
+      amountFormatted: formatMoney(toMinor(dto.amount_minor), dto.currency),
+      amountMinor: toMinor(dto.amount_minor),
+      currency: dto.currency,
+      occurredOn: formatDate(dto.occurred_at),
+      occurredAtIso: dto.occurred_at,
+      raw: {},
+    },
+    explanation: toExplanationVM(dto),
+    flagReason: toFlagReason(dto),
+    candidateCount: dto.candidate_count ?? undefined,
+    resolution: dto.resolution ?? undefined,
   };
+}
+
+// An explanation exists only when the AI actually produced one. A fraud flag or
+// a skipped item carries null hypothesis/confidence, and rendering those as
+// "0% confidence" would be a lie the operator might act on.
+function toExplanationVM(dto: ReviewItem): ExplanationVM | undefined {
+  if (dto.hypothesis == null || dto.confidence == null) return undefined;
+  return {
+    id: dto.id,
+    transactionId: dto.txn_id,
+    hypothesis: dto.hypothesis,
+    confidence: dto.confidence,
+    confidenceLabel: confidenceLabel(dto.confidence),
+    suggestedAction: dto.suggested_action ?? "investigate",
+    needsHuman: dto.needs_human,
+  };
+}
+
+function toFlagReason(dto: ReviewItem): ReviewItemVM["flagReason"] {
+  if (dto.kind === "fraud") return "fraud";
+  if (dto.hypothesis == null) return "ai_skipped";
+  return dto.needs_human ? "low_confidence" : undefined;
 }
 
 // ── Audit Entry ────────────────────────────────────────────────

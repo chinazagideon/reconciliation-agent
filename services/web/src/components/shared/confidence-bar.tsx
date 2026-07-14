@@ -22,7 +22,7 @@ export function ConfidenceBar({ confidence }: ConfidenceBarProps) {
       </div>
       {/* Label */}
       <span className="text-xs font-mono text-muted">
-        {confidence.toFixed(2)} · {confidenceLabel(confidence)}
+        {confidence} · {confidenceLabel(confidence)}
       </span>
     </div>
   );

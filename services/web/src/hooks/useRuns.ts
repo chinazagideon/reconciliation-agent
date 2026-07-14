@@ -9,6 +9,7 @@ import {
 import { fetchRuns, fetchRun, createRun } from "@/lib/api";
 import { toRunVM, toPage } from "@/lib/mappers";
 import type { RunVM, Page } from "@/lib/view-models";
+import type { CreateRunRequest } from "@resolution/shared";
 import { qk } from "./query-keys";
 
 // Paginated list of runs → Page<RunVM>. keepPreviousData avoids a flash of
@@ -28,29 +29,18 @@ export function useRun(id: string | undefined) {
     queryKey: qk.runs.detail(id ?? "—"),
     queryFn: () => fetchRun(id as string),
     enabled: !!id,
-    select: (res): RunVM => toRunVM(res.data),
+    select: (res): RunVM => toRunVM(res.data.run),
   });
 }
 
-// Input the UI works with — camelCase, like every other VM. The hook maps it
-// to the wire request shape so components never write snake_case.
-export interface CreateRunInput {
-  windowStart: string;
-  windowEnd: string;
-  sources: string[];
-}
-
-// Start a new run. On success, invalidate the runs list + dashboard so the
-// new run shows up immediately.
+// Start a new run. Resolves to the new run's id — the POST returns only
+// { status, runId }, not the run itself, so there is nothing to map to a VM
+// here; the detail page fetches the run with this id.
 export function useCreateRun() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: CreateRunInput) =>
-      createRun({
-        window_start: input.windowStart,
-        window_end: input.windowEnd,
-        sources: input.sources,
-      }).then((res) => toRunVM(res.data)),
+    mutationFn: (input: CreateRunRequest) =>
+      createRun(input).then((res) => res.data.runId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.runs.all });
       qc.invalidateQueries({ queryKey: qk.dashboard.all });
