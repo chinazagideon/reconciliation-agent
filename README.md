@@ -1,6 +1,6 @@
 # Reconciliation Agent
 
-A financial reconciliation agent for two-sided marketplaces. It ingests Stripe
+A financial reconciliation agent. It ingests Stripe
 transactions, internal ledger entries, and supplier payout records, matches them
 **deterministically**, then uses AI reasoning **only** to explain the leftovers —
 with confidence scores and audit trails.

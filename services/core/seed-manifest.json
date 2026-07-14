@@ -1,0 +1,120 @@
+{
+  "generated_at": "2026-07-14T20:14:58.881Z",
+  "window": {
+    "start": "2026-06-16T00:00:00.000Z",
+    "end": "2026-06-30T23:59:59.000Z"
+  },
+  "total_records": 222,
+  "patterns": [
+    {
+      "pattern": "exact_match",
+      "count": 120,
+      "expected_outcome": "exact",
+      "records": [
+        {
+          "stripe_id": "txn_jj2c0nk14e5k4l3i99nwysce",
+          "ledger_id": "LED-20260616-001",
+          "amount_minor": 28588,
+          "currency": "CAD"
+        },
+        {
+          "stripe_id": "txn_h099xdcgneka4n82m9br2hvu",
+          "ledger_id": "LED-20260617-002",
+          "amount_minor": 32048,
+          "currency": "CAD"
+        },
+        {
+          "stripe_id": "txn_tr3o7kmfi7zeja03663qmokc",
+          "ledger_id": "LED-20260629-003",
+          "amount_minor": 31561,
+          "currency": "CAD"
+        }
+      ]
+    },
+    {
+      "pattern": "timing_mismatch",
+      "count": 20,
+      "expected_outcome": "tolerant:timing",
+      "records": []
+    },
+    {
+      "pattern": "fee_discrepancy",
+      "count": 16,
+      "expected_outcome": "tolerant:fee",
+      "records": []
+    },
+    {
+      "pattern": "rounding",
+      "count": 4,
+      "expected_outcome": "tolerant:fee",
+      "records": []
+    },
+    {
+      "pattern": "batched_payout",
+      "count": 8,
+      "expected_outcome": "tolerant:batch",
+      "records": [
+        {
+          "payout_id": "txn_uvi9nuxj5yh5bcjztz5biizl",
+          "member_ledger_ids": [
+            "LED-20260617-081",
+            "LED-20260617-082",
+            "LED-20260617-083"
+          ],
+          "total_minor": 255362
+        },
+        {
+          "payout_id": "txn_ibbv8p58as2xf818lxb3eutq",
+          "member_ledger_ids": [
+            "LED-20260624-084",
+            "LED-20260624-085",
+            "LED-20260624-086"
+          ],
+          "total_minor": 116938
+        }
+      ]
+    },
+    {
+      "pattern": "partial_capture",
+      "count": 10,
+      "expected_outcome": "ai_explain",
+      "records": []
+    },
+    {
+      "pattern": "missing_one_side",
+      "count": 10,
+      "expected_outcome": "ai_explain",
+      "records": []
+    },
+    {
+      "pattern": "refund",
+      "count": 8,
+      "expected_outcome": "ai_explain",
+      "records": []
+    },
+    {
+      "pattern": "fraud_flag",
+      "count": 26,
+      "expected_outcome": "flag_fraud",
+      "records": [
+        {
+          "payout_id": "txn_puvqob1agqrsv2v26cs4c1gn",
+          "candidate_count": 12,
+          "note": "Abnormally high candidate count"
+        },
+        {
+          "payout_id": "txn_ey5wxcjsh8hgo7n81wja7l3v",
+          "candidate_count": 12,
+          "note": "Abnormally high candidate count"
+        }
+      ]
+    }
+  ],
+  "expected_results": {
+    "exact_matches": 120,
+    "tolerant_matches": 48,
+    "ai_explained": 52,
+    "fraud_flagged": 2,
+    "total_matched_pct": "76%"
+  }
+}

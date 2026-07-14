@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
+
+@layer base {
+  :root {
+    --color-surface: #ffffff;
+    --color-background: #fafafa;
+    --color-border: #e5e7eb;
+    --color-muted: #6b7280;
+  }
+
+  .dark {
+    --color-surface: #1a1d27;
+    --color-background: #0f1117;
+    --color-border: #2d3140;
+    --color-muted: #9ca3af;
+  }
+
+  body {
+    @apply bg-background text-gray-900 dark:text-gray-100 antialiased;
+    font-family: "Inter", system-ui, sans-serif;
+  }
+
+  /* Financial convention: amounts are always monospaced and right-aligned */
+  .money {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+}

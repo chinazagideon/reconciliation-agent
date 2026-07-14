@@ -8,3 +8,7 @@ __pycache__/
 
 # generated demo artifact
 seed-manifest.json
+
+services/web/.next
+.next
+*.tsbuildinfo
