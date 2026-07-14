@@ -5,6 +5,10 @@ __pycache__/
 *.pyc
 .venv/
 .DS_Store
+
+# generated demo artifact
+seed-manifest.json
+
 services/web/.next
 .next
 *.tsbuildinfo
