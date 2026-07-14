@@ -47,9 +47,12 @@ export function registerReconciliationRoutes(app: FastifyInstance, c: Container,
     if (!result.ok) return reply.code(500).send({ error: result.error.message });
     const m = result.value;
     return reply.code(201).send({
-      total_records: m.total_records,
-      patterns: m.patterns.map((p) => ({ pattern: p.pattern, count: p.count })),
-      expected_results: m.expected_results,
+      data: {
+        generated_at: m.generated_at,
+        window: m.window,
+        total_records: m.total_records,
+        expected_results: m.expected_results,
+      },
     });
   });
 }

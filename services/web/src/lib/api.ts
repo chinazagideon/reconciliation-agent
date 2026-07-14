@@ -22,9 +22,12 @@ const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 
 // ── Internal fetch wrapper ─────────────────────────────────────
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  const { headers, ...rest } = init ?? {};
   const res = await fetch(`${BASE}${path}`, {
-    headers: { "Content-Type": "application/json", ...init?.headers },
-    ...init,
+    ...rest,
+    // Only declare JSON when there's actually a body — an empty string body
+    // with this header set is invalid JSON and Fastify rejects it outright.
+    headers: { ...(rest.body ? { "Content-Type": "application/json" } : {}), ...headers },
   });
 
   if (!res.ok) {

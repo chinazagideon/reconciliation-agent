@@ -10,6 +10,8 @@ export const config = {
   agentBaseUrl: process.env.AGENT_BASE_URL ?? "http://localhost:8000",
   stripeApiKey: process.env.STRIPE_API_KEY,
   port: Number(process.env.PORT ?? 3000),
+  // Origin(s) allowed to call this API from a browser (the web app dev server).
+  corsOrigin: process.env.CORS_ORIGIN ?? "http://localhost:3001",
   // Runtime config lives in env, not the DB (PRD §8, decision 2). The Settings
   // page shows this read-only. Below this confidence, an AI item needs a human.
   aiConfidenceThreshold: Number(process.env.AI_CONFIDENCE_THRESHOLD ?? 0.7),
