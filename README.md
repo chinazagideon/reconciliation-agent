@@ -1,9 +1,6 @@
-# Reconciliation Agent
+# Clara 
 
-A financial reconciliation agent. It ingests Stripe
-transactions, internal ledger entries, and supplier payout records, matches them
-**deterministically**, then uses AI reasoning **only** to explain the leftovers —
-with confidence scores and audit trails.
+Clara ingests your Stripe payouts, internal ledgers, and supplier records—matching what works, and giving you audited AI explanations for what doesn't.
 
 > Core thesis: *shipping AI features that touch money without catastrophic
 > failure modes.* Boring deterministic core; AI at the boundary.
