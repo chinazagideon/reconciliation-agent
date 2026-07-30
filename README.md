@@ -11,7 +11,7 @@ Clara ingests your Stripe payouts, internal ledgers, and supplier records—matc
 - `db/migrations` — PostgreSQL schema (JSONB for raw payloads).
 - `docs/` — PROJECT_CONTEXT, STATUS, and the ADR log (`docs/decisions/`).
 
-## Golden rule of the architecture
+## Structured
 Dependencies point **inward**. `domain/` imports nothing from `adapters/`.
 The AI layer proposes; it never decides. Every match is auditable.
 
